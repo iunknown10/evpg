@@ -24,11 +24,14 @@ webserver_db_fn(PGresult *res,
     evbuffer_free(buf);
 }
 
-
 void
 webserver(struct evhttp_request *req, struct evpg_cfg *d)
 {
     struct evbuffer *buf;
+
+    /* so really this won't work out too hot since evhttp_request structures
+       are free()'d after this call. But it gives you a general idea
+       about how to use the lib */
 
     evpg_make_query(d, request, (void *)webserver_db_fn, req);
     return;
