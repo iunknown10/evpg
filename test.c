@@ -30,7 +30,7 @@ webserver(struct evhttp_request *req, struct evpg_cfg *d)
 {
     struct evbuffer *buf;
 
-    evpg_make_query(d, "SELECT * FROM fuck WHERE id='id_7800'", (void *)webserver_db_fn, req);
+    evpg_make_query(d, request, (void *)webserver_db_fn, req);
     return;
 }
 
@@ -44,11 +44,15 @@ webserver_init(void)
 
 int main(int argc, char **argv)
 {
+    char *db;
     if (argc < 3)
     {
 	printf("Usage: %s <connection string> <query>\n", argv[0]);
 	exit(1);
     }
+
+    db = argv[1];
+    request = argv[2];
 
     pgconfig = evpg_config_init();
     event_init();
