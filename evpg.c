@@ -187,8 +187,7 @@ evpg_make_evquery(int sock, short which, void **data)
     {
        	if (!(dbnode = evpg_snatch_connection(config)))
 	{
-	    printf("No db connections avail!\n");
-	    event_set(event, sock, EV_WRITE, (void *)evpg_make_evquery, data);
+	    event_set(event, 0, EV_WRITE, (void *)evpg_make_evquery, data);
 	    event_add(event, 0);
 	    return;
 	}
@@ -231,8 +230,6 @@ void evpg_make_query(struct evpg_cfg *config,
     data[5] = event;
 
     evpg_make_evquery(0, 0, data);
-    //event_set(event, 0, EV_WRITE, (void *)evpg_make_evquery, data);
-    //event_add(event, 0);
 }
 
 static void
