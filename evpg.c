@@ -151,7 +151,7 @@ evpg_query_finished(int sock, short which, void **data)
     }
 
     /* this query has not finished */
-    event_set(event, sock, EV_WRITE, (void *)evpg_query_finished, data);
+    event_set(event, sock, EV_READ, (void *)evpg_query_finished, data);
     event_add(event, 0);
 }
 
@@ -187,12 +187,12 @@ evpg_make_evquery(int sock, short which, void **data)
     {
        	if (!(dbnode = evpg_snatch_connection(config)))
 	{
+	    printf("No db connections avail!\n");
 	    event_set(event, sock, EV_WRITE, (void *)evpg_make_evquery, data);
 	    event_add(event, 0);
 	    return;
 	}
     }
-
 
     PQsendQuery(dbnode->dbconn, querystr);
 
@@ -207,7 +207,9 @@ evpg_make_evquery(int sock, short which, void **data)
     data[4] = dbnode;
 
     evpg_set_active(config, dbnode);
-    event_set(&dbnode->event, sock, EV_WRITE, (void *)evpg_query_finished, data);
+
+    event_set(&dbnode->event, PQsocket(dbnode->dbconn), EV_WRITE, 
+	    (void *)evpg_query_finished, data);
     event_add(&dbnode->event, 0);
 }
 
