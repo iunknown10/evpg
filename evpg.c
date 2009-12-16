@@ -38,16 +38,10 @@ evpg_db_exists(struct evpg_db_node *node, struct evpg_db_list *list)
 static void 
 evpg_set_active(struct evpg_cfg *config, struct evpg_db_node *node)
 {
-    /* first check to see if we are already active/deactive */
     struct evpg_db_list *checker;
     struct evpg_db_list *prev, *next;
 
-    /*
-    if(!(checker = 
-    if(!(checker = evpg_db_exists(node, config->dbs.active)))
-	checker = evpg_db_exists(node, config->dbs.ready);
-	*/
-
+    /* first check to see if we are already active/deactive */
     if ((!(checker = evpg_db_exists(node, config->dbs.active))) &&
 	    (!(checker = evpg_db_exists(node, config->dbs.ready))))
     {
