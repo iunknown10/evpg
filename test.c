@@ -56,7 +56,7 @@ int main(int argc, char **argv)
 
     pgconfig = evpg_config_init();
     event_init();
-    evpg_connect(pgconfig, "dbname=fuckdb");
+    evpg_connect(pgconfig, db);
     webserver_init();
     event_loop(0);
 }
