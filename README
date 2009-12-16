@@ -1,0 +1,29 @@
+libevpq is a library that allows libevent based applications to communicate 
+to a pgsql database in a non-blocking manner. 
+
+The goal of the project is to be easy to use along with transparent to the
+calling application as possible. 
+
+Utilizing within your application is simple:
+
+1. initialize the configuration
+   struct evpg_cfg *config;
+   config = evpg_config_init();
+2. Initialize libevent
+   event_init();
+3. Connect to your database one or more times
+   for (i=0; i < number_of_connections; i++)
+      evpg_connect(config, "dbname=whatever hostaddr=5.5.5.5")
+4. Whenever a query needs to be made use evpg to make the query
+   evpg_make_query(config, "SELECT * FROM DB", 
+     (void *)application_callback_when_query_is_finished, userdata);
+
+   Argument 1 is the evpg configuration,
+   Argument 2 is the query you would like to perform
+   Argument 3 is the callback function to call once the query has completed.
+   Argument 4 is a pointer to data the callback function should be passed.
+
+5. Profit.
+
+There *are* bugs, I'm sure of it - there isn't much error checking right now,
+but I am working on this.

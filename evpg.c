@@ -42,10 +42,14 @@ evpg_set_active(struct evpg_cfg *config, struct evpg_db_node *node)
     struct evpg_db_list *checker;
     struct evpg_db_list *prev, *next;
 
+    /*
+    if(!(checker = 
     if(!(checker = evpg_db_exists(node, config->dbs.active)))
 	checker = evpg_db_exists(node, config->dbs.ready);
+	*/
 
-    if (checker == NULL)
+    if ((!(checker = evpg_db_exists(node, config->dbs.active))) &&
+	    (!(checker = evpg_db_exists(node, config->dbs.ready))))
     {
 	struct evpg_db_list *new_list;
 	new_list = calloc(sizeof(struct evpg_db_list), 1);
@@ -56,19 +60,28 @@ evpg_set_active(struct evpg_cfg *config, struct evpg_db_node *node)
 	return;
     }
 
+    checker = evpg_db_exists(node, config->dbs.ready);
+
     prev = checker->prev;
     next = checker->next;
+
 
     /* remove it from the current list */
     if (prev) prev->next = next;
     if (next) next->prev = prev;
+    
+    if (checker == config->dbs.ready)
+	config->dbs.ready = next;
 
     /* add it to the active list */
     checker->prev = NULL;
     checker->next = NULL;
 
     checker->next = config->dbs.active;
-    config->dbs.active->prev = checker;
+
+    if(config->dbs.active)
+	config->dbs.active->prev = checker;
+
     config->dbs.active = checker;
 }
 
@@ -78,11 +91,9 @@ evpg_set_ready(struct evpg_cfg *config, struct evpg_db_node *node)
     struct evpg_db_list *checker;
     struct evpg_db_list *prev, *next;
 
-    if(!(checker = evpg_db_exists(node, config->dbs.active)))
-	checker = evpg_db_exists(node, config->dbs.ready);
-
-    if (checker == NULL)
-    {
+    if ((!(checker = evpg_db_exists(node, config->dbs.active))) &&
+            (!(checker = evpg_db_exists(node, config->dbs.ready))))
+    { 
 	struct evpg_db_list *new_list;
 	new_list = calloc(sizeof(struct evpg_db_list), 1);
 	new_list->db = node;
@@ -92,17 +103,25 @@ evpg_set_ready(struct evpg_cfg *config, struct evpg_db_node *node)
 	return;
     }
 
+    checker = evpg_db_exists(node, config->dbs.active);
+
     prev = checker->prev;
     next = checker->next;
 
     if (prev) prev->next = next;
     if (next) next->prev = prev;
+    
+    if (checker == config->dbs.active)  
+	config->dbs.active = next;
 
     checker->next = NULL;
     checker->prev = NULL;
 
     checker->next = config->dbs.ready;
-    config->dbs.ready->prev = checker;
+
+    if(config->dbs.ready)
+	config->dbs.ready->prev = checker;
+
     config->dbs.ready = checker;
 }
 
@@ -128,17 +147,17 @@ evpg_query_finished(int sock, short which, void **data)
     if (PQisBusy(dbnode->dbconn) == 0)
     {
 	PGresult *result;
-
 	result = PQgetResult(dbnode->dbconn);
 	cb(result, usrdata);
 	PQclear(result);
 	free(event);
 	free(data);
+	evpg_set_ready(config, dbnode);
 	return;
     }
 
     /* this query has not finished */
-    event_set(event, sock, EV_READ, (void *)evpg_query_finished, data);
+    event_set(event, sock, EV_WRITE, (void *)evpg_query_finished, data);
     event_add(event, 0);
 }
 
@@ -146,7 +165,9 @@ static struct evpg_db_node *
 evpg_snatch_connection(struct evpg_cfg *config)
 {
     if (config->dbs.ready == NULL)
+    {
 	return NULL;
+    }
 
     return config->dbs.ready->db;
 }
@@ -165,14 +186,19 @@ evpg_make_evquery(int sock, short which, void **data)
     querystr = data[1];
     cb       = data[2];
     usrdata  = data[3];
+    dbnode   = data[4];
     event    = data[5];
 
-    if (!(dbnode = evpg_snatch_connection(config)))
+    if (!dbnode)
     {
-	event_set(event, sock, EV_WRITE, (void *)evpg_make_evquery, data);
-	event_add(event, 0);
-	return;
+       	if (!(dbnode = evpg_snatch_connection(config)))
+	{
+	    event_set(event, sock, EV_WRITE, (void *)evpg_make_evquery, data);
+	    event_add(event, 0);
+	    return;
+	}
     }
+
 
     PQsendQuery(dbnode->dbconn, querystr);
 
@@ -187,7 +213,7 @@ evpg_make_evquery(int sock, short which, void **data)
     data[4] = dbnode;
 
     evpg_set_active(config, dbnode);
-    event_set(&dbnode->event, sock, EV_READ, (void *)evpg_query_finished, data);
+    event_set(&dbnode->event, sock, EV_WRITE, (void *)evpg_query_finished, data);
     event_add(&dbnode->event, 0);
 }
 
@@ -208,8 +234,9 @@ void evpg_make_query(struct evpg_cfg *config,
     data[4] = NULL;
     data[5] = event;
 
-    event_set(event, 0, EV_WRITE, (void *)evpg_make_evquery, data);
-    event_add(event, 0);
+    evpg_make_evquery(0, 0, data);
+    //event_set(event, 0, EV_WRITE, (void *)evpg_make_evquery, data);
+    //event_add(event, 0);
 }
 
 static void
@@ -234,11 +261,13 @@ evpg_connect_check(int sock, short which, void **usrdata)
 	    event_add(&dbnode->event, 0);
 	    break;
 	case PGRES_POLLING_OK:
+	    PQsetnonblocking(dbnode->dbconn, 1);
 	    evpg_set_ready(config, dbnode);
 	    free(usrdata);
 	    break;
 	default:
 	    /* this is probably bad and should deal with it :) */
+	    printf("ERROR %s\n", PQerrorMessage(dbnode->dbconn));
 	    break;
     }
 }
